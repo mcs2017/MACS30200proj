@@ -1,0 +1,109 @@
+---
+title: "PS2_part2"
+output:
+  pdf_document: default
+  html_document: default
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+```{r cars}
+library(tidyverse)
+library(forcats)
+library(broom)
+library(modelr)
+library(stringr)
+library(lmtest)
+library(car)
+library(RColorBrewer)
+
+
+#options(digits = 3)
+#set.seed(1234)
+#theme_set(theme_minimal())
+#setwd("~/Google Drive/spring2017/macs30200/MACS30200proj/ProblemSets/PS3/")
+```
+
+```{r}
+biden_df = read.csv("data/biden.csv") %>% 
+  na.omit() %>%
+  mutate(dem = factor(dem),
+         rep = factor(rep))
+```
+### (a)
+```{r}
+biden_interaction = lm(biden ~ age*educ, data = biden_df)
+tidy(biden_interaction)
+```
+
+```{r}
+instant_effect <- function(model, mod_var){
+  int.name <- names(model$coefficients)[[which(str_detect(names(model$coefficients), ":"))]]
+  
+  marg_var <- str_split(int.name, ":")[[1]][[which(str_split(int.name, ":")[[1]] != mod_var)]]
+  
+  beta.hat <- coef(model)
+  cov <- vcov(model)
+  
+  if(class(model)[[1]] == "lm"){
+    z <- seq(min(model$model[[mod_var]]), max(model$model[[mod_var]]))
+  }else{
+    z <- seq(min(model$data[[mod_var]]), max(model$data[[mod_var]]))
+  }
+  
+  dy.dx <- beta.hat[[marg_var]] + beta.hat[[int.name]] * z
+  
+  se.dy.dx <- sqrt(cov[marg_var, marg_var]+
+                     z^2 * cov[int.name, int.name] +
+                     2 * z * cov[marg_var, int.name])
+  
+  data_frame(z = z,
+             dy.dx = dy.dx,
+             se = se.dy.dx)
+}
+
+
+instant_effect(biden_interaction, "educ") %>%
+  ggplot(aes(z, dy.dx,
+             ymin = dy.dx - 1.96 * se,
+             ymax = dy.dx + 1.96 * se)) +
+  geom_pointrange() +
+  geom_hline(yintercept = 0, linetype = 2) +
+  labs(title = "Marginal effect of age",
+       subtitle = "By respondent education",
+       x = "Education",
+       y = "Estimated marginal effect")
+```
+
+The marginal effect of age is estimated above. According to the marginal effct plot, marginal effect of age is positive if the education is less than 14 years and is negative if the education is more than 14 years.
+
+```{r}
+linearHypothesis(biden_interaction, "age + age:educ")
+```
+  
+  The test indicates that the marginal effect of age is significant.
+  
+### (b)
+```{r}
+instant_effect(biden_interaction, "age") %>%
+  ggplot(aes(z, dy.dx,
+             ymin = dy.dx - 1.96 * se,
+             ymax = dy.dx + 1.96 * se)) +
+  geom_pointrange() +
+  geom_hline(yintercept = 0, linetype = 2) +
+  labs(title = "Marginal effect of education",
+       subtitle = "By respondent age",
+       x = "Age",
+       y = "Estimated marginal effect")
+```
+  
+  The marginal effect of education is estimated above. According to the marginal effct plot, marginal effect of education is positive if the age is less than 34 and is negative if the age is more than 34 years.
+  
+  
+```{r}
+linearHypothesis(biden_interaction, "educ + age:educ")
+```
+  
+  The test indicates that the marginal effect of education is significant.
